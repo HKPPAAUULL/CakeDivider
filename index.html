@@ -13,17 +13,31 @@
     body { display: flex; flex-direction: column; }
 
     header {
-      flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
-      background: #111; border-bottom: 1px solid #2a2a2a;
+      flex: none; display: flex; align-items: center; justify-content: center;
+      padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
+      background: #ffb347; border-bottom: 1px solid #2a2a2a;
     }
-    header h1 { font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    header label { display: flex; align-items: center; gap: 8px; font-size: 15px; white-space: nowrap; }
-    header input {
-      width: 64px; padding: 6px 8px; font-size: 18px; text-align: center;
-      color: #fff; background: #222; border: 1px solid #444; border-radius: 8px; outline: none;
+    header h1 { color: #111; min-width: 0; font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .slices {
+      position: absolute; z-index: 1; left: 50%; top: 0; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 15px; white-space: nowrap;
+      background: rgba(0,0,0,.55); border-radius: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.4);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     }
-    header input:focus { border-color: #ffb347; }
+    .stepper { display: flex; align-items: stretch; height: 38px; border: 1px solid #444; border-radius: 10px; overflow: hidden; background: #222; }
+    .stepper:focus-within { border-color: #ffb347; }
+    .stepper button {
+      width: 38px; font-size: 22px; font-weight: 600; line-height: 1; color: #fff; background: #2c2c2c;
+      border: 0; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+    }
+    .stepper button:active { background: #ffb347; color: #111; }
+    .stepper button:disabled { color: #555; background: #222; cursor: default; }
+    .stepper input {
+      width: 52px; padding: 0 4px; font-size: 18px; text-align: center; color: #fff; background: transparent;
+      border: 0; border-left: 1px solid #444; border-right: 1px solid #444; outline: none;
+      -moz-appearance: textfield; appearance: textfield;
+    }
+    .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
 
     #stage { position: relative; flex: 1; overflow: hidden; }
     #stage video, #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -35,21 +49,86 @@
       width: min(90%, 420px); padding: 16px; text-align: center; line-height: 1.5;
       background: rgba(0,0,0,.75); border-radius: 12px; font-size: 15px; display: none;
     }
+
+    #helpBtn {
+      position: absolute; z-index: 3;
+      right: calc(16px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom));
+      width: 48px; height: 48px; border-radius: 50%;
+      font-size: 24px; font-weight: 700; line-height: 1; color: #fff; cursor: pointer;
+      background: rgba(0,0,0,.5); border: 2px solid rgba(255,255,255,.85);
+      -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    }
+    #helpBtn.active { background: #ffb347; border-color: #ffb347; color: #111; }
+
+    #help { position: absolute; inset: 0; z-index: 2; background: rgba(0,0,0,.5); animation: fadeIn .2s ease; }
+    #help[hidden] { display: none; }
+    #help svg { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 1px 3px rgba(0,0,0,.8)); }
+    #help .tip {
+      position: absolute; padding: 8px 14px; text-align: center; white-space: nowrap; line-height: 1.35;
+      font-size: 16px; font-weight: 600; background: rgba(17,17,17,.88);
+      border: 1.5px solid #ffb347; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,0,0,.5);
+    }
+    #help .tip b { color: #ffb347; font-size: 20px; margin-right: 4px; }
+    #help .tip small { display: block; font-size: 13px; font-weight: 400; color: #ddd; }
+    #help .close-hint {
+      position: absolute; right: calc(76px + env(safe-area-inset-right)); bottom: calc(30px + env(safe-area-inset-bottom));
+      font-size: 13px; color: #ccc; white-space: nowrap;
+    }
+    @keyframes fadeIn { from { opacity: 0; } }
   </style>
 </head>
 <body>
   <header>
-    <h1>蛋糕平均分切器</h1>
-    <label>分
-      <input id="slices" type="number" inputmode="numeric" min="1" max="100" step="1" value="8" />
-      份
-    </label>
+    <h1>🎂 蛋糕平均分切器 🍰</h1>
   </header>
 
   <main id="stage">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
     <div id="msg"></div>
+
+    <div class="slices" id="controls">
+      <span>分</span>
+      <div class="stepper">
+        <button id="dec" type="button" aria-label="減少一份">−</button>
+        <input id="slices" type="number" inputmode="numeric" min="1" max="100" step="1" value="8" aria-label="份數" />
+        <button id="inc" type="button" aria-label="增加一份">+</button>
+      </div>
+      <span>份</span>
+    </div>
+
+    <div id="help" hidden>
+      <svg id="helpSvg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrowHead" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#ffb347" />
+          </marker>
+          <g id="hand">
+            <path fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width=".8" paint-order="stroke"
+              d="M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z" />
+          </g>
+        </defs>
+        <path id="hRotArrow" fill="none" stroke="#ffb347" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowHead)" />
+        <path id="hRotTrail" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="8" stroke-linecap="round" />
+        <use id="hRotHand" href="#hand" />
+
+        <circle id="hPinchGhost" fill="none" stroke="#ffb347" stroke-width="3" stroke-dasharray="10 8" />
+        <path id="hPinchArrowL" fill="none" stroke="#ffb347" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowHead)" />
+        <path id="hPinchArrowR" fill="none" stroke="#ffb347" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowHead)" />
+        <use id="hPinchL" href="#hand" />
+        <use id="hPinchR" href="#hand" />
+
+        <circle id="hTapRing0" fill="none" stroke="#fff" stroke-width="3" />
+        <circle id="hTapRing1" fill="none" stroke="#fff" stroke-width="3" />
+        <use id="hTapHand" href="#hand" />
+        <text id="hTapX2" fill="#ffb347" font-size="22" font-weight="800">×2</text>
+      </svg>
+      <div class="tip" id="tipRotate"><b>↻</b>一隻手指拖<small>轉分隔線角度</small></div>
+      <div class="tip" id="tipPinch"><b>⤢</b>兩隻手指<small>縮放個圓（亦可以順便轉）</small></div>
+      <div class="tip" id="tipTap"><b>×2</b>撳兩下<small>還原大細同角度</small></div>
+      <div class="close-hint">撳任何位置關閉</div>
+    </div>
+    <button id="helpBtn" type="button" aria-label="使用說明" aria-expanded="false">?</button>
   </main>
 
   <script>
@@ -61,6 +140,10 @@
       const input = document.getElementById('slices');
       const msg = document.getElementById('msg');
       const stage = document.getElementById('stage');
+      const help = document.getElementById('help');
+      const helpBtn = document.getElementById('helpBtn');
+      const controls = document.getElementById('controls');
+      const CONTROL_GAP = 14;
 
       const state = {
         slices: clamp(parseInt(localStorage.getItem('cake.slices'), 10) || 8),
@@ -68,7 +151,8 @@
         rotation: -Math.PI / 2,
         w: 0, h: 0,
       };
-      input.value = state.slices;
+      const decBtn = document.getElementById('dec');
+      const incBtn = document.getElementById('inc');
 
       function clamp(n) { return Math.min(MAX, Math.max(MIN, n)); }
 
@@ -108,6 +192,7 @@
         canvas.height = Math.round(state.h * dpr);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         draw();
+        if (!help.hidden) layoutHelp();
       }
 
       function strokeTwice(width, color) {
@@ -119,10 +204,18 @@
         ctx.stroke();
       }
 
+      // Circle sits in the area above a band reserved for the slice controls, which hang right below it
+      function geom() {
+        const { w, h } = state;
+        const availH = Math.max(0, h - controls.offsetHeight - CONTROL_GAP * 2);
+        const m = Math.min(w, availH);
+        return { cx: w / 2, cy: availH / 2, r: m * state.radiusRatio, m };
+      }
+
       function draw() {
         const { w, h, slices, rotation } = state;
-        const cx = w / 2, cy = h / 2;
-        const r = Math.min(w, h) * state.radiusRatio;
+        const { cx, cy, r } = geom();
+        controls.style.top = `${cy + r + CONTROL_GAP}px`;
         ctx.clearRect(0, 0, w, h);
         ctx.lineCap = 'round';
 
@@ -150,16 +243,40 @@
       }
 
       // ---------- Slice input ----------
+      function setSlices(n, syncInput = true) {
+        state.slices = clamp(n);
+        localStorage.setItem('cake.slices', state.slices);
+        if (syncInput) input.value = state.slices;
+        decBtn.disabled = state.slices <= MIN;
+        incBtn.disabled = state.slices >= MAX;
+        draw();
+      }
+
       input.addEventListener('input', () => {
         const n = parseInt(input.value, 10);
-        if (Number.isFinite(n) && n >= MIN && n <= MAX) {
-          state.slices = n;
-          localStorage.setItem('cake.slices', n);
-          draw();
-        }
+        if (Number.isFinite(n) && n >= MIN && n <= MAX) setSlices(n, false);
       });
       input.addEventListener('change', () => { input.value = state.slices; });
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+
+      // − / + buttons: tap = ±1, press and hold = auto-repeat
+      [[decBtn, -1], [incBtn, 1]].forEach(([btn, delta]) => {
+        let timer = 0;
+        const stop = () => clearTimeout(timer);
+        const repeat = (delay) => {
+          setSlices(state.slices + delta);
+          if (btn.disabled) return;
+          timer = setTimeout(() => repeat(Math.max(60, delay * 0.8)), delay);
+        };
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          stop();
+          repeat(400);
+        });
+        ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => btn.addEventListener(ev, stop));
+        btn.addEventListener('click', (e) => { if (e.detail === 0) setSlices(state.slices + delta); });
+        btn.addEventListener('contextmenu', (e) => e.preventDefault());
+      });
 
       // ---------- Gestures: 1 finger = rotate, 2 fingers = resize + rotate, double tap = reset ----------
       const pointers = new Map();
@@ -167,7 +284,7 @@
 
       function gestureInfo() {
         const pts = [...pointers.values()];
-        const cx = state.w / 2, cy = state.h / 2;
+        const { cx, cy } = geom();
         if (pts.length === 1) {
           return { angle: Math.atan2(pts[0].y - cy, pts[0].x - cx), dist: null };
         }
@@ -221,8 +338,122 @@
         lastTap = now;
       });
 
+      // ---------- Help overlay (animated gesture guide drawn on the actual circle) ----------
+      const $ = (id) => document.getElementById(id);
+      const polar = (cx, cy, r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+      const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
+      const seg = (t, from, to) => Math.min(1, Math.max(0, (t - from) / (to - from)));
+      const HAND_SCALE = 2.2;
+      const TAP_TIMES = [0.3, 0.7];
+      let helpGeo = null, helpRaf = 0, helpStart = 0;
+
+      function handAt(el, x, y, s = HAND_SCALE, flip = false) {
+        el.setAttribute('transform', `translate(${x},${y}) scale(${flip ? -s : s},${s}) translate(-11.5,-7)`);
+      }
+
+      function placeTip(el, x, y, anchor = 'center') {
+        const tw = el.offsetWidth, th = el.offsetHeight;
+        const left = anchor === 'right' ? x - tw : anchor === 'left' ? x : x - tw / 2;
+        el.style.left = Math.min(Math.max(8, left), state.w - tw - 8) + 'px';
+        el.style.top = Math.min(Math.max(8, y - th / 2), state.h - th - 8) + 'px';
+      }
+
+      function layoutHelp() {
+        const { w, h } = state;
+        const { cx, cy, r, m } = geom();
+        const R = Math.max(r, m * 0.3);
+        const a0 = -Math.PI * 0.72, a1 = -Math.PI * 0.28;
+        helpGeo = { cx, cy, R, a0, a1 };
+        $('helpSvg').setAttribute('viewBox', `0 0 ${w} ${h}`);
+
+        const ra = Math.max(R + 12, Math.min(R + 24, cy - 12));
+        const [sx, sy] = polar(cx, cy, ra, a0), [ex, ey] = polar(cx, cy, ra, a1);
+        $('hRotArrow').setAttribute('d', `M${sx},${sy} A${ra},${ra} 0 0 1 ${ex},${ey}`);
+
+        const ay = cy + R * 0.5 + (R >= 136 ? -28 : 46);
+        $('hPinchArrowL').setAttribute('d', `M${cx - R * 0.2},${ay} H${cx - R * 0.6}`);
+        $('hPinchArrowR').setAttribute('d', `M${cx + R * 0.2},${ay} H${cx + R * 0.6}`);
+
+        $('hTapX2').setAttribute('x', cx + 24);
+        $('hTapX2').setAttribute('y', cy - 14);
+
+        const portrait = cy - R >= 100;
+        if (portrait) {
+          placeTip($('tipRotate'), cx, cy - R - 72);
+          const tip = $('tipPinch');
+          placeTip(tip, cx, controls.offsetTop + controls.offsetHeight + 12 + tip.offsetHeight / 2);
+          placeTip($('tipTap'), cx, cy - R * 0.45);
+        } else {
+          placeTip($('tipRotate'), cx - R - 30, cy - R * 0.6, 'right');
+          placeTip($('tipTap'), cx - R - 30, cy + R * 0.3, 'right');
+          placeTip($('tipPinch'), cx + R + 30, cy + R * 0.5, 'left');
+        }
+      }
+
+      function frameHelp(now) {
+        const t = (now - helpStart) / 1000;
+        const { cx, cy, R, a0, a1 } = helpGeo;
+
+        // One finger dragging along the rim
+        const tr = t % 2.6;
+        const rotOpacity = Math.min(seg(tr, 0, 0.3), 1 - seg(tr, 1.9, 2.3));
+        const [hx, hy] = polar(cx, cy, R, a0 + (a1 - a0) * ease(seg(tr, 0.3, 1.9)));
+        const [tx, ty] = polar(cx, cy, R, a0);
+        handAt($('hRotHand'), hx, hy);
+        $('hRotHand').setAttribute('opacity', rotOpacity);
+        $('hRotTrail').setAttribute('d', `M${tx},${ty} A${R},${R} 0 0 1 ${hx},${hy}`);
+        $('hRotTrail').setAttribute('opacity', rotOpacity);
+
+        // Two fingers spreading apart, ghost circle grows
+        const tp = (t + 0.4) % 2.6;
+        const spread = ease(seg(tp, 0.3, 1.7));
+        const pinchOpacity = Math.min(seg(tp, 0, 0.3), 1 - seg(tp, 1.7, 2.1));
+        const dx = R * (0.18 + 0.37 * spread), py = cy + R * 0.5;
+        handAt($('hPinchL'), cx - dx, py, HAND_SCALE, true);
+        handAt($('hPinchR'), cx + dx, py);
+        $('hPinchL').setAttribute('opacity', pinchOpacity);
+        $('hPinchR').setAttribute('opacity', pinchOpacity);
+        $('hPinchGhost').setAttribute('cx', cx);
+        $('hPinchGhost').setAttribute('cy', cy);
+        $('hPinchGhost').setAttribute('r', R * (0.8 + 0.2 * spread));
+        $('hPinchGhost').setAttribute('opacity', pinchOpacity);
+
+        // Double tap at the centre with ripples
+        const tt = t % 2.2;
+        TAP_TIMES.forEach((ti, i) => {
+          const p = seg(tt, ti, ti + 0.6);
+          const ring = $('hTapRing' + i);
+          ring.setAttribute('cx', cx);
+          ring.setAttribute('cy', cy);
+          ring.setAttribute('r', 8 + 30 * p);
+          ring.setAttribute('opacity', p > 0 && p < 1 ? 1 - p : 0);
+        });
+        const pressed = TAP_TIMES.some((ti) => Math.abs(tt - ti) < 0.08);
+        handAt($('hTapHand'), cx, cy, pressed ? HAND_SCALE * 0.88 : HAND_SCALE);
+
+        helpRaf = requestAnimationFrame(frameHelp);
+      }
+
+      function setHelp(open) {
+        help.hidden = !open;
+        helpBtn.classList.toggle('active', open);
+        helpBtn.textContent = open ? '✕' : '?';
+        helpBtn.setAttribute('aria-expanded', open);
+        cancelAnimationFrame(helpRaf);
+        if (open) {
+          layoutHelp();
+          helpStart = performance.now();
+          frameHelp(helpStart);
+        }
+      }
+
+      helpBtn.addEventListener('click', () => setHelp(help.hidden));
+      help.addEventListener('click', () => setHelp(false));
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setHelp(false); });
+
       window.addEventListener('resize', resize);
       new ResizeObserver(resize).observe(stage);
+      setSlices(state.slices);
       resize();
       startCamera();
       keepAwake();

@@ -1,0 +1,9 @@
+{
+  "name": "cake-divider",
+  "version": "1.0.0",
+  "description": "Camera overlay for evenly dividing a round cake",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  }
+}

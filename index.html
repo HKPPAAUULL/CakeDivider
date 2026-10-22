@@ -28,24 +28,22 @@
     /* Phones in landscape: not enough height, so sit in the bottom row between camera picker and help button */
     @media (orientation: landscape) and (max-height: 500px) {
       .slices { bottom: calc(16px + env(safe-area-inset-bottom)); }
-      .camera-picker { max-width: calc(50% - 136px); }
     }
 
     .camera-picker {
-      position: absolute; z-index: 1; display: flex; align-items: center; gap: 6px;
+      position: absolute; z-index: 1; display: flex; align-items: center; justify-content: center;
       left: calc(16px + env(safe-area-inset-left)); bottom: calc(16px + env(safe-area-inset-bottom));
-      height: 48px; max-width: calc(50% - 40px); padding: 0 12px; color: #fff;
-      background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.35); border-radius: 24px;
-      box-shadow: 0 2px 10px rgba(0,0,0,.4); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+      width: 48px; height: 48px; padding: 0; color: #fff; cursor: pointer;
+      background: rgba(0,0,0,.5); border: 2px solid rgba(255,255,255,.85); border-radius: 50%;
+      -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
     }
     .camera-picker[hidden] { display: none; }
-    .camera-picker svg { flex: none; width: 20px; height: 20px; }
+    .camera-picker svg { flex: none; width: 24px; height: 24px; }
     .camera-picker select {
-      min-width: 0; height: 100%; padding-right: 4px; font-size: 15px; color: #fff; background: transparent;
-      border: 0; outline: none; cursor: pointer; text-overflow: ellipsis; -webkit-appearance: none; appearance: none;
+      position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0;
+      opacity: 0; cursor: pointer; -webkit-appearance: none; appearance: none;
     }
     .camera-picker select option { color: #fff; background: #222; }
-    .camera-picker .chevron { flex: none; font-size: 12px; opacity: .8; pointer-events: none; }
     .stepper { display: flex; align-items: stretch; height: 38px; border: 1px solid #444; border-radius: 10px; overflow: hidden; background: #222; }
     .stepper:focus-within { border-color: #ffb347; }
     .stepper button {
@@ -122,7 +120,6 @@
     <label class="camera-picker" id="cameraPicker" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 3 7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" /></svg>
       <select id="cameraSelect" aria-label="選擇鏡頭"></select>
-      <span class="chevron" aria-hidden="true">▼</span>
     </label>
 
     <div id="help" hidden>

@@ -143,6 +143,12 @@
         <use id="hPinchL" href="#hand" />
         <use id="hPinchR" href="#hand" />
 
+        <ellipse id="hTiltGhost" fill="none" stroke="#ffb347" stroke-width="3" stroke-dasharray="10 8" />
+        <path id="hTiltArrowL" fill="none" stroke="#ffb347" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowHead)" />
+        <path id="hTiltArrowR" fill="none" stroke="#ffb347" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowHead)" />
+        <use id="hTiltL" href="#hand" />
+        <use id="hTiltR" href="#hand" />
+
         <circle id="hTapRing0" fill="none" stroke="#fff" stroke-width="3" />
         <circle id="hTapRing1" fill="none" stroke="#fff" stroke-width="3" />
         <use id="hTapHand" href="#hand" />
@@ -150,6 +156,7 @@
       </svg>
       <div class="tip" id="tipRotate"><b>↻</b>一隻手指<small>轉動角度</small></div>
       <div class="tip" id="tipPinch"><b>⤢</b>兩隻手指<small>縮放蛋糕</small></div>
+      <div class="tip" id="tipTilt"><b>⇅</b>兩指上下拖<small>切換立體角度</small></div>
       <div class="tip" id="tipTap"><b>×2</b>連按兩下<small>還原預設</small></div>
       <div class="close-hint">按任意位置關閉說明</div>
     </div>
@@ -171,11 +178,14 @@
       const cameraPicker = document.getElementById('cameraPicker');
       const cameraSelect = document.getElementById('cameraSelect');
       const CONTROL_GAP = 14;
+      const TILT_MAX = (70 * Math.PI) / 180;
+      const CAKE_HEIGHT = 0.45;
 
       const state = {
         slices: clamp(parseInt(localStorage.getItem('cake.slices'), 10) || 8),
         radiusRatio: 0.42,
         rotation: -Math.PI / 2,
+        tilt: 0,
         w: 0, h: 0,
       };
       const decBtn = document.getElementById('dec');
@@ -257,36 +267,54 @@
         ctx.stroke();
       }
 
-      // Circle is centred in the area above the (fixed-position) slice controls
+      // Cake is centred in the area above the (fixed-position) slice controls.
+      // Tilted view = orthographic projection: the top becomes an ellipse (ry = r·cos tilt)
+      // and the side wall shows with projected height r·CAKE_HEIGHT·sin tilt.
       function geom() {
-        const { w } = state;
+        const { w, tilt } = state;
         const availH = Math.max(0, controls.offsetTop - CONTROL_GAP);
         const m = Math.min(w, availH);
-        return { cx: w / 2, cy: availH / 2, r: m * state.radiusRatio, m };
+        const cy = availH / 2;
+        const r = m * state.radiusRatio;
+        const side = r * CAKE_HEIGHT * Math.sin(tilt);
+        return { cx: w / 2, cy, r, m, ry: r * Math.cos(tilt), top: cy - side / 2, side };
       }
 
       function draw() {
         const { w, h, slices, rotation } = state;
-        const { cx, cy, r } = geom();
+        const { cx, r, ry, top, side } = geom();
+        const showSide = side > 0.5;
         ctx.clearRect(0, 0, w, h);
         ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        if (showSide) {
+          ctx.beginPath();
+          ctx.moveTo(cx - r, top);
+          ctx.lineTo(cx - r, top + side);
+          ctx.ellipse(cx, top + side, r, ry, 0, Math.PI, 0, true);
+          ctx.lineTo(cx + r, top);
+          strokeTwice(2, 'rgba(255,255,255,.75)');
+        }
 
         ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.ellipse(cx, top, r, ry, 0, 0, Math.PI * 2);
         strokeTwice(3, '#ffffff');
 
         if (slices > 1) {
           for (let i = 0; i < slices; i++) {
             const a = rotation + (i * 2 * Math.PI) / slices;
+            const x = cx + r * Math.cos(a), y = top + ry * Math.sin(a);
             ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+            ctx.moveTo(cx, top);
+            ctx.lineTo(x, y);
+            if (showSide && Math.sin(a) > 0) ctx.lineTo(x, y + side);
             strokeTwice(i === 0 ? 3 : 2, i === 0 ? '#ffb347' : '#ffffff');
           }
         }
 
         ctx.beginPath();
-        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.arc(cx, top, 5, 0, Math.PI * 2);
         ctx.fillStyle = '#ffb347';
         ctx.fill();
         ctx.lineWidth = 2;
@@ -330,18 +358,47 @@
         btn.addEventListener('contextmenu', (e) => e.preventDefault());
       });
 
-      // ---------- Gestures: 1 finger = rotate, 2 fingers = resize + rotate, double tap = reset ----------
+      // ---------- Gestures ----------
+      // 1 finger = rotate; 2 fingers = resize + rotate, or (both dragged up/down together) tilt; double tap = reset
+      const TILT_PER_PX = TILT_MAX / 240;
+      const GESTURE_SLOP = 10;
       const pointers = new Map();
-      let last = null;
+      let last = null, twoStart = null, twoMode = null;
+
+      // Screen vector -> angle on the (tilted) cake plane
+      const planeAngle = (dx, dy) => Math.atan2(dy / Math.cos(state.tilt), dx);
 
       function gestureInfo() {
         const pts = [...pointers.values()];
-        const { cx, cy } = geom();
+        const { cx, top } = geom();
         if (pts.length === 1) {
-          return { angle: Math.atan2(pts[0].y - cy, pts[0].x - cx), dist: null };
+          return { angle: planeAngle(pts[0].x - cx, pts[0].y - top), dist: null };
         }
         const [a, b] = pts;
-        return { angle: Math.atan2(b.y - a.y, b.x - a.x), dist: Math.hypot(b.x - a.x, b.y - a.y) };
+        return { angle: planeAngle(b.x - a.x, b.y - a.y), dist: Math.hypot(b.x - a.x, b.y - a.y), midY: (a.y + b.y) / 2 };
+      }
+
+      function resetTwoFinger() {
+        twoStart = pointers.size === 2 ? new Map([...pointers].map(([id, p]) => [id, { ...p }])) : null;
+        twoMode = null;
+      }
+
+      // Decide once per two-finger gesture: parallel vertical drag = tilt, anything else = pinch/rotate
+      function classifyTwoFinger() {
+        const ids = [...pointers.keys()];
+        const moves = ids.map((id) => {
+          const p = pointers.get(id), s0 = twoStart.get(id);
+          return { dx: p.x - s0.x, dy: p.y - s0.y };
+        });
+        // Average of both fingers: touch moves arrive one finger at a time
+        if ((Math.hypot(moves[0].dx, moves[0].dy) + Math.hypot(moves[1].dx, moves[1].dy)) / 2 < GESTURE_SLOP) return null;
+        const [s1, s2] = ids.map((id) => twoStart.get(id));
+        const [p1, p2] = ids.map((id) => pointers.get(id));
+        const distChange = Math.abs(Math.hypot(p2.x - p1.x, p2.y - p1.y) - Math.hypot(s2.x - s1.x, s2.y - s1.y));
+        const [m1, m2] = moves;
+        const vertical = (m) => Math.abs(m.dy) > Math.abs(m.dx) * 1.5;
+        const meanDy = Math.abs(m1.dy + m2.dy) / 2;
+        return m1.dy * m2.dy > 0 && vertical(m1) && vertical(m2) && distChange < meanDy * 0.5 ? 'tilt' : 'pinch';
       }
 
       function localPoint(e) {
@@ -353,6 +410,7 @@
         if (pointers.size >= 2) return;
         canvas.setPointerCapture(e.pointerId);
         pointers.set(e.pointerId, localPoint(e));
+        resetTwoFinger();
         last = gestureInfo();
       });
 
@@ -360,10 +418,19 @@
         if (!pointers.has(e.pointerId)) return;
         pointers.set(e.pointerId, localPoint(e));
         const cur = gestureInfo();
+        if (cur.dist !== null && !twoMode) {
+          twoMode = classifyTwoFinger();
+          if (twoMode) last = cur;
+          return;
+        }
         if (last && (last.dist === null) === (cur.dist === null)) {
-          state.rotation += cur.angle - last.angle;
-          if (cur.dist && last.dist) {
-            state.radiusRatio = Math.min(0.5, Math.max(0.08, state.radiusRatio * (cur.dist / last.dist)));
+          if (twoMode === 'tilt') {
+            state.tilt = Math.min(TILT_MAX, Math.max(0, state.tilt - (cur.midY - last.midY) * TILT_PER_PX));
+          } else {
+            state.rotation += cur.angle - last.angle;
+            if (cur.dist && last.dist) {
+              state.radiusRatio = Math.min(0.5, Math.max(0.08, state.radiusRatio * (cur.dist / last.dist)));
+            }
           }
           draw();
         }
@@ -372,6 +439,7 @@
 
       function endPointer(e) {
         pointers.delete(e.pointerId);
+        resetTwoFinger();
         last = pointers.size ? gestureInfo() : null;
       }
       canvas.addEventListener('pointerup', endPointer);
@@ -385,6 +453,7 @@
         if (now - lastTap < 300) {
           state.radiusRatio = 0.42;
           state.rotation = -Math.PI / 2;
+          state.tilt = 0;
           draw();
         }
         lastTap = now;
@@ -426,18 +495,25 @@
         $('hPinchArrowL').setAttribute('d', `M${cx - R * 0.2},${ay} H${cx - R * 0.6}`);
         $('hPinchArrowR').setAttribute('d', `M${cx + R * 0.2},${ay} H${cx + R * 0.6}`);
 
+        const tx = R * 0.62, ty = cy - R * 0.05;
+        $('hTiltArrowL').setAttribute('d', `M${cx - tx - 24},${ty} V${ty - R * 0.32}`);
+        $('hTiltArrowR').setAttribute('d', `M${cx + tx + 44},${ty} V${ty - R * 0.32}`);
+        helpGeo.tilt = { tx, ty };
+
         $('hTapX2').setAttribute('x', cx + 24);
         $('hTapX2').setAttribute('y', cy - 14);
 
         const portrait = cy - R >= 100;
         if (portrait) {
           placeTip($('tipRotate'), cx, cy - R - 72);
-          const tip = $('tipPinch');
-          placeTip(tip, cx, (cy + R + controls.offsetTop) / 2);
+          const by = (cy + R + controls.offsetTop) / 2;
+          placeTip($('tipPinch'), cx - 8, by, 'right');
+          placeTip($('tipTilt'), cx + 8, by, 'left');
           placeTip($('tipTap'), cx, cy - R * 0.45);
         } else {
           placeTip($('tipRotate'), cx - R - 30, cy - R * 0.6, 'right');
           placeTip($('tipTap'), cx - R - 30, cy + R * 0.3, 'right');
+          placeTip($('tipTilt'), cx + R + 30, cy - R * 0.4, 'left');
           placeTip($('tipPinch'), cx + R + 30, cy + R * 0.5, 'left');
         }
       }
@@ -456,8 +532,8 @@
         $('hRotTrail').setAttribute('d', `M${tx},${ty} A${R},${R} 0 0 1 ${hx},${hy}`);
         $('hRotTrail').setAttribute('opacity', rotOpacity);
 
-        // Two fingers spreading apart, ghost circle grows
-        const tp = (t + 0.4) % 2.6;
+        // Two fingers spreading apart, ghost circle grows (alternates with the tilt demo)
+        const tp = (t + 0.4) % 5.2;
         const spread = ease(seg(tp, 0.3, 1.7));
         const pinchOpacity = Math.min(seg(tp, 0, 0.3), 1 - seg(tp, 1.7, 2.1));
         const dx = R * (0.18 + 0.37 * spread), py = cy + R * 0.5;
@@ -469,6 +545,21 @@
         $('hPinchGhost').setAttribute('cy', cy);
         $('hPinchGhost').setAttribute('r', R * (0.8 + 0.2 * spread));
         $('hPinchGhost').setAttribute('opacity', pinchOpacity);
+
+        // Two fingers dragged up together, ghost ellipse flattens like a tilted cake
+        const tq = tp - 2.6;
+        const lift = ease(seg(tq, 0.3, 1.7));
+        const tiltOpacity = Math.min(seg(tq, 0, 0.3), 1 - seg(tq, 1.7, 2.1));
+        const { tx: tiltX, ty: tiltY } = helpGeo.tilt, tiltHandY = tiltY + R * 0.12 - R * 0.32 * lift;
+        handAt($('hTiltL'), cx - tiltX, tiltHandY, HAND_SCALE, true);
+        handAt($('hTiltR'), cx + tiltX, tiltHandY);
+        $('hTiltL').setAttribute('opacity', tiltOpacity);
+        $('hTiltR').setAttribute('opacity', tiltOpacity);
+        $('hTiltGhost').setAttribute('cx', cx);
+        $('hTiltGhost').setAttribute('cy', cy);
+        $('hTiltGhost').setAttribute('rx', R * 0.8);
+        $('hTiltGhost').setAttribute('ry', R * 0.8 * Math.cos(lift * TILT_MAX * 0.8));
+        $('hTiltGhost').setAttribute('opacity', tiltOpacity);
 
         // Double tap at the centre with ripples
         const tt = t % 2.2;

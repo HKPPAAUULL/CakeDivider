@@ -133,6 +133,7 @@
               d="M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z" />
           </g>
         </defs>
+        <path id="hCake" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="2.5" />
         <path id="hRotArrow" fill="none" stroke="#ffb347" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowHead)" />
         <path id="hRotTrail" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="8" stroke-linecap="round" />
         <use id="hRotHand" href="#hand" />
@@ -479,10 +480,21 @@
         el.style.top = Math.min(Math.max(8, y - th / 2), state.h - th - 8) + 'px';
       }
 
+      // Tips go in rows above/below the demo circle or in columns beside it, whichever
+      // leaves the bigger circle, so they never cover the animated gestures.
       function layoutHelp() {
         const { w, h } = state;
-        const { cx, cy, r, m } = geom();
-        const R = Math.max(r, m * 0.3);
+        const tips = ['tipRotate', 'tipTap', 'tipPinch', 'tipTilt'].map($);
+        const tw = Math.max(...tips.map((el) => el.offsetWidth));
+        const th = Math.max(...tips.map((el) => el.offsetHeight));
+        const G = 10, ARROW_PAD = 30;
+        const bottom = Math.max(0, controls.offsetTop - G);
+        const stackR = Math.min(w / 2 - G, (bottom - 2 * th - 4 * G - ARROW_PAD) / 2);
+        const sideR = Math.min(w / 2 - tw - 3 * G, (bottom - ARROW_PAD - 2 * G) / 2);
+        const stacked = stackR >= sideR;
+        const R = Math.max(40, Math.min(stacked ? stackR : sideR, geom().m * 0.42));
+        const cx = w / 2;
+        const cy = stacked ? (G + ARROW_PAD + bottom) / 2 : (ARROW_PAD + bottom) / 2;
         const a0 = -Math.PI * 0.72, a1 = -Math.PI * 0.28;
         helpGeo = { cx, cy, R, a0, a1 };
         $('helpSvg').setAttribute('viewBox', `0 0 ${w} ${h}`);
@@ -503,18 +515,26 @@
         $('hTapX2').setAttribute('x', cx + 24);
         $('hTapX2').setAttribute('y', cy - 14);
 
-        const portrait = cy - R >= 100;
-        if (portrait) {
-          placeTip($('tipRotate'), cx, cy - R - 72);
-          const by = (cy + R + controls.offsetTop) / 2;
-          placeTip($('tipPinch'), cx - 8, by, 'right');
-          placeTip($('tipTilt'), cx + 8, by, 'left');
-          placeTip($('tipTap'), cx, cy - R * 0.45);
+        let cake = `M${cx - R},${cy} a${R},${R} 0 1 0 ${2 * R},0 a${R},${R} 0 1 0 ${-2 * R},0`;
+        for (let i = 0; state.slices > 1 && i < state.slices; i++) {
+          const [px, py] = polar(cx, cy, R, state.rotation + (i * 2 * Math.PI) / state.slices);
+          cake += ` M${cx},${cy} L${px},${py}`;
+        }
+        $('hCake').setAttribute('d', cake);
+
+        const [tRotate, tTap, tPinch, tTilt] = tips;
+        if (stacked) {
+          const topY = G + th / 2, botY = bottom - th / 2;
+          placeTip(tRotate, cx - G / 2, topY, 'right');
+          placeTip(tTap, cx + G / 2, topY, 'left');
+          placeTip(tPinch, cx - G / 2, botY, 'right');
+          placeTip(tTilt, cx + G / 2, botY, 'left');
         } else {
-          placeTip($('tipRotate'), cx - R - 30, cy - R * 0.6, 'right');
-          placeTip($('tipTap'), cx - R - 30, cy + R * 0.3, 'right');
-          placeTip($('tipTilt'), cx + R + 30, cy - R * 0.4, 'left');
-          placeTip($('tipPinch'), cx + R + 30, cy + R * 0.5, 'left');
+          const dy = Math.max((th + G) / 2, R * 0.4);
+          placeTip(tRotate, cx - R - 2 * G, cy - dy, 'right');
+          placeTip(tTap, cx - R - 2 * G, cy + dy, 'right');
+          placeTip(tTilt, cx + R + 2 * G, cy - dy, 'left');
+          placeTip(tPinch, cx + R + 2 * G, cy + dy, 'left');
         }
       }
 
@@ -582,6 +602,7 @@
         helpBtn.classList.toggle('active', open);
         helpBtn.textContent = open ? '✕' : '?';
         helpBtn.setAttribute('aria-expanded', open);
+        canvas.style.visibility = open ? 'hidden' : '';
         cancelAnimationFrame(helpRaf);
         if (open) {
           layoutHelp();
